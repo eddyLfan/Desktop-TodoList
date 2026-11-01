@@ -78,9 +78,9 @@ namespace DesktopTodo
             this.state = state;
             this.persist = persist;
             Title = "桌面待办";
-            Width = 340;
-            MaxHeight = 520;
-            MinHeight = 122;
+            Width = 400;
+            MaxHeight = 600;
+            MinHeight = 150;
             SizeToContent = SizeToContent.Height;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -90,11 +90,11 @@ namespace DesktopTodo
             ShowActivated = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI, Microsoft YaHei");
-            FontSize = 13;
+            FontSize = 16;
             UseLayoutRounding = true;
             SnapsToDevicePixels = true;
 
-            shell = new Border { Padding = new Thickness(16, 13, 16, 13), CornerRadius = new CornerRadius(10) };
+            shell = new Border { Padding = new Thickness(20, 16, 20, 16), CornerRadius = new CornerRadius(12) };
             layout = new Grid();
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -104,7 +104,7 @@ namespace DesktopTodo
             shell.Child = layout;
             Content = shell;
 
-            Grid header = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            Grid header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -114,20 +114,24 @@ namespace DesktopTodo
                 Content = categoryPanel,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 78
+                MaxHeight = 96
             };
             header.Children.Add(categoryScroll);
             pinButton = TextButton("", "始终置顶", delegate { ToggleTopmost(); });
-            pinButton.Width = 26;
-            pinButton.Height = 25;
-            pinButton.Padding = new Thickness(3, 2, 3, 3);
+            pinButton.Width = 30;
+            pinButton.Height = 30;
+            pinButton.Padding = new Thickness(5, 4, 5, 4);
+            pinButton.HorizontalContentAlignment = HorizontalAlignment.Center;
             pinButton.VerticalAlignment = VerticalAlignment.Top;
-            pinButton.Margin = new Thickness(8, 0, 4, 0);
+            pinButton.Margin = new Thickness(8, 0, 6, 0);
             Grid.SetColumn(pinButton, 1);
             header.Children.Add(pinButton);
             menuButton = TextButton("⋯", "待办菜单", delegate { OpenMainMenu(); });
-            menuButton.FontSize = 18;
-            menuButton.Padding = new Thickness(2, 0, 2, 2);
+            menuButton.FontSize = 22;
+            menuButton.Width = 30;
+            menuButton.Height = 30;
+            menuButton.Padding = new Thickness(3, 0, 3, 2);
+            menuButton.HorizontalContentAlignment = HorizontalAlignment.Center;
             menuButton.VerticalAlignment = VerticalAlignment.Top;
             Grid.SetColumn(menuButton, 2);
             header.Children.Add(menuButton);
@@ -141,7 +145,7 @@ namespace DesktopTodo
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 CanContentScroll = false,
-                MaxHeight = 350,
+                MaxHeight = 410,
                 Padding = new Thickness(0, 0, 3, 0)
             };
             listScroll.AllowDrop = true;
@@ -151,9 +155,9 @@ namespace DesktopTodo
             Grid.SetRow(listScroll, 1);
             layout.Children.Add(listScroll);
 
-            reminderFace = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Top };
+            reminderFace = new TextBlock { FontSize = 14, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
             reminderFace.RenderTransform = new TranslateTransform();
-            reminderText = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 257 };
+            reminderText = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 306, VerticalAlignment = VerticalAlignment.Center };
             Grid reminderContent = new Grid();
             reminderContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             reminderContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -163,22 +167,22 @@ namespace DesktopTodo
             reminderButton = TextButton(null, "查看最紧急事项", delegate { GoToReminder(); });
             reminderButton.Content = reminderContent;
             reminderButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            reminderButton.Margin = new Thickness(0, 9, 0, 0);
+            reminderButton.Margin = new Thickness(0, 12, 0, 0);
             Grid.SetRow(reminderButton, 2);
             layout.Children.Add(reminderButton);
 
             addButton = TextButton("＋ 添加事项", "添加事项", delegate { AddTodo(); });
-            addButton.FontSize = 12;
-            addButton.Margin = new Thickness(0, 10, 0, 0);
+            addButton.FontSize = 14;
+            addButton.Margin = new Thickness(0, 14, 0, 0);
             addButton.HorizontalAlignment = HorizontalAlignment.Left;
             Grid.SetRow(addButton, 3);
             layout.Children.Add(addButton);
 
-            feedbackPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 7, 0, 0), Visibility = Visibility.Collapsed };
-            feedbackText = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 235 };
+            feedbackPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 9, 0, 0), Visibility = Visibility.Collapsed };
+            feedbackText = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 292 };
             undoButton = TextButton("撤销", "撤销删除", delegate { UndoDelete(); });
-            undoButton.FontSize = 11;
-            undoButton.Margin = new Thickness(9, 0, 0, 0);
+            undoButton.FontSize = 13;
+            undoButton.Margin = new Thickness(12, 0, 0, 0);
             feedbackPanel.Children.Add(feedbackText);
             feedbackPanel.Children.Add(undoButton);
             Grid.SetRow(feedbackPanel, 4);
@@ -220,13 +224,13 @@ namespace DesktopTodo
             Button result = new Button
             {
                 Content = text,
-                Padding = new Thickness(1, 3, 1, 3),
+                Padding = new Thickness(2, 4, 2, 4),
                 Margin = new Thickness(0),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Cursor = Cursors.Hand,
-                MinHeight = 22,
+                MinHeight = 28,
                 Foreground = ink ?? Brushes.Black,
                 FontWeight = FontWeights.Normal
             };
@@ -259,35 +263,35 @@ namespace DesktopTodo
         internal static ControlTemplate CreateTodoCheckTemplate(bool dark)
         {
             var root = new FrameworkElementFactory(typeof(Grid));
-            root.SetValue(FrameworkElement.WidthProperty, 22.0);
-            root.SetValue(FrameworkElement.HeightProperty, 22.0);
+            root.SetValue(FrameworkElement.WidthProperty, 26.0);
+            root.SetValue(FrameworkElement.HeightProperty, 26.0);
             root.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
             var focus = new FrameworkElementFactory(typeof(Border));
             focus.Name = "FocusRing";
-            focus.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            focus.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
             focus.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             focus.SetValue(Border.BorderBrushProperty, new SolidColorBrush(dark ? Color.FromRgb(172, 205, 181) : Color.FromRgb(68, 107, 80)));
             focus.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
             root.AppendChild(focus);
             var box = new FrameworkElementFactory(typeof(Border));
             box.Name = "CheckSurface";
-            box.SetValue(FrameworkElement.WidthProperty, 18.0);
-            box.SetValue(FrameworkElement.HeightProperty, 18.0);
-            box.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            box.SetValue(FrameworkElement.WidthProperty, 20.0);
+            box.SetValue(FrameworkElement.HeightProperty, 20.0);
+            box.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
             box.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             box.SetValue(Border.BorderBrushProperty, new SolidColorBrush(dark ? Color.FromRgb(152, 175, 159) : Color.FromRgb(111, 139, 120)));
             box.SetValue(Border.BackgroundProperty, Brushes.Transparent);
             root.AppendChild(box);
             var mark = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
             mark.Name = "CheckMark";
-            mark.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M4,8.5 L7.2,11.5 L13.8,5"));
+            mark.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M4.5,9.5 L8,13 L15.5,5.5"));
             mark.SetValue(System.Windows.Shapes.Path.StrokeProperty, Brushes.White);
-            mark.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 1.7);
+            mark.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 1.8);
             mark.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
             mark.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, PenLineCap.Round);
             mark.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
-            mark.SetValue(FrameworkElement.WidthProperty, 18.0);
-            mark.SetValue(FrameworkElement.HeightProperty, 18.0);
+            mark.SetValue(FrameworkElement.WidthProperty, 20.0);
+            mark.SetValue(FrameworkElement.HeightProperty, 20.0);
             mark.SetValue(UIElement.IsHitTestVisibleProperty, false);
             mark.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
             root.AppendChild(mark);
@@ -395,9 +399,9 @@ namespace DesktopTodo
                 {
                     Text = category.Name,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = 126,
+                    MaxWidth = 156,
                     Foreground = category.Id == state.Settings.ActiveCategoryId ? ink : muted,
-                    FontWeight = category.Id == state.Settings.ActiveCategoryId ? FontWeights.Medium : FontWeights.Normal,
+                    FontWeight = category.Id == state.Settings.ActiveCategoryId ? FontWeights.SemiBold : FontWeights.Normal,
                     TextDecorations = category.Id == state.Settings.ActiveCategoryId ? TextDecorations.Underline : null
                 };
                 TextBlock dot = new TextBlock { Margin = new Thickness(3, 0, 0, 0), FontWeight = FontWeights.Medium };
@@ -406,14 +410,16 @@ namespace DesktopTodo
                 label.Children.Add(dot);
                 Button b = TextButton(null, "分类：" + category.Name, delegate { SwitchCategory(captured.Id); });
                 b.Content = label;
-                b.FontSize = 12;
-                b.Margin = new Thickness(0, 0, 12, 1);
+                b.FontSize = 14;
+                b.Margin = new Thickness(0, 0, 14, 3);
                 b.ToolTip = category.Name + "（右键可管理分类）";
                 b.ContextMenu = CategoryMenu(category);
                 categoryPanel.Children.Add(b);
             }
             Button addCategory = TextButton("＋", "新增分类", AddCategory);
-            addCategory.FontSize = 13;
+            addCategory.FontSize = 18;
+            addCategory.Width = 28;
+            addCategory.HorizontalContentAlignment = HorizontalAlignment.Center;
             addCategory.Foreground = muted;
             categoryPanel.Children.Add(addCategory);
 
@@ -431,7 +437,7 @@ namespace DesktopTodo
                 taskPanel.Children.Add(new TextBlock
                 {
                     Text = done.Count > 0 ? "这里的待办都完成了。" : "记下一件想做的事。",
-                    FontSize = 12,
+                    FontSize = 14,
                     Foreground = muted,
                     Margin = new Thickness(0, 12, 0, 9),
                     TextWrapping = TextWrapping.Wrap
@@ -444,8 +450,8 @@ namespace DesktopTodo
                 {
                     Commit(delegate { state.Settings.ShowCompleted = !state.Settings.ShowCompleted; }, false);
                 });
-                completed.Margin = new Thickness(0, 8, 0, 1);
-                completed.FontSize = 11;
+                completed.Margin = new Thickness(0, 12, 0, 2);
+                completed.FontSize = 13;
                 completed.Foreground = muted;
                 taskPanel.Children.Add(completed);
                 if (state.Settings.ShowCompleted)
@@ -458,18 +464,18 @@ namespace DesktopTodo
         private UIElement CreateRow(TodoItem item)
         {
             bool done = !string.IsNullOrEmpty(item.CompletedAt);
-            Grid host = new Grid { Margin = new Thickness(0, 2, 0, 2), Background = Brushes.Transparent };
-            Grid row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            Grid host = new Grid { Margin = new Thickness(0, 3, 0, 3), Background = Brushes.Transparent };
+            Grid row = new Grid { Margin = new Thickness(0, 5, 0, 5) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
             CheckBox check = new CheckBox
             {
                 IsChecked = done,
                 IsThreeState = false,
-                Width = 22,
-                Height = 22,
+                Width = 26,
+                Height = 26,
                 Template = CreateTodoCheckTemplate(dark),
                 FocusVisualStyle = null,
                 VerticalAlignment = VerticalAlignment.Top,
@@ -493,6 +499,8 @@ namespace DesktopTodo
                 Text = item.Title,
                 Foreground = done ? muted : ink,
                 TextWrapping = TextWrapping.Wrap,
+                LineHeight = 24,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 TextDecorations = done ? TextDecorations.Strikethrough : null,
                 Padding = new Thickness(0, 0, 2, 0)
             };
@@ -505,13 +513,13 @@ namespace DesktopTodo
             content.Children.Add(title);
             if (!done && !string.IsNullOrEmpty(item.DueAt))
             {
-                TextBlock countdown = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap };
+                TextBlock countdown = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap };
                 countdowns[item.Id] = countdown;
                 Button due = TextButton(null, "编辑截止时间：" + item.Title, delegate { EditTodo(item); });
                 due.Content = countdown;
-                due.FontSize = 11;
-                due.MinHeight = 18;
-                due.Padding = new Thickness(0, 1, 0, 0);
+                due.FontSize = 13;
+                due.MinHeight = 22;
+                due.Padding = new Thickness(0, 3, 0, 0);
                 due.HorizontalAlignment = HorizontalAlignment.Left;
                 DateTimeOffset? deadline = Deadline.Parse(item.DueAt);
                 if (deadline.HasValue) due.ToolTip = deadline.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
@@ -522,8 +530,8 @@ namespace DesktopTodo
             if (!done)
             {
                 Button handle = TextButton(null, "拖动调整顺序：" + item.Title, null);
-                handle.Width = 18;
-                handle.Height = 22;
+                handle.Width = 24;
+                handle.Height = 28;
                 handle.Padding = new Thickness(2, 2, 2, 2);
                 handle.VerticalAlignment = VerticalAlignment.Top;
                 handle.Cursor = Cursors.SizeAll;
@@ -534,7 +542,8 @@ namespace DesktopTodo
                         dots.Children.Add(new EllipseGeometry(new Point(x, y), .8, .8));
                 handle.Content = new System.Windows.Shapes.Path
                 {
-                    Data = dots, Fill = muted, Width = 10, Height = 16, Opacity = .55,
+                    Data = dots, Fill = muted, Width = 12, Height = 18, Opacity = .65,
+                    Stretch = Stretch.Uniform,
                     IsHitTestVisible = false
                 };
                 handle.PreviewMouseLeftButtonDown += delegate(object sender, MouseButtonEventArgs e)
@@ -548,7 +557,10 @@ namespace DesktopTodo
                 row.Children.Add(handle);
             }
             Button more = TextButton("⋯", "更多操作：" + item.Title, null);
-            more.FontSize = 17;
+            more.FontSize = 20;
+            more.Width = 28;
+            more.Height = 28;
+            more.HorizontalContentAlignment = HorizontalAlignment.Center;
             more.Padding = new Thickness(2, 0, 2, 0);
             more.Foreground = muted;
             more.VerticalAlignment = VerticalAlignment.Top;
@@ -1084,8 +1096,8 @@ namespace DesktopTodo
                 if (source != null && source.CompositionTarget != null) scale = source.CompositionTarget.TransformToDevice.M11;
                 if (scale <= 0) scale = 1;
                 double allowedHeight = Math.Max(160, (info.Work.Bottom - info.Work.Top) / scale - 40);
-                MaxHeight = Math.Min(520, allowedHeight);
-                listScroll.MaxHeight = Math.Max(80, MaxHeight - 145);
+                MaxHeight = Math.Min(600, allowedHeight);
+                listScroll.MaxHeight = Math.Max(100, MaxHeight - 190);
                 int widthPixels = (int)Math.Round((ActualWidth > 0 ? ActualWidth : Width) * scale);
                 int margin = (int)Math.Round(20 * scale);
                 if (desktopLayer != null) desktopLayer.Position(info.Work.Right - widthPixels - margin, info.Work.Top + margin);

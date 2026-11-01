@@ -61,9 +61,9 @@ namespace DesktopTodo
     <Setter Property='BorderBrush' Value='{DynamicResource MenuLine}'/>
     <Setter Property='BorderThickness' Value='1'/>
     <Setter Property='FontFamily' Value='Segoe UI, Microsoft YaHei UI, Microsoft YaHei'/>
-    <Setter Property='FontSize' Value='12'/>
-    <Setter Property='MinWidth' Value='220'/>
-    <Setter Property='MaxWidth' Value='240'/>
+    <Setter Property='FontSize' Value='14'/>
+    <Setter Property='MinWidth' Value='240'/>
+    <Setter Property='MaxWidth' Value='260'/>
     <Setter Property='MaxHeight' Value='520'/>
     <Setter Property='Padding' Value='4'/>
     <Setter Property='SnapsToDevicePixels' Value='True'/>
@@ -89,14 +89,14 @@ namespace DesktopTodo
     <Setter Property='Foreground' Value='{DynamicResource MenuInk}'/>
     <Setter Property='Background' Value='Transparent'/>
     <Setter Property='FontFamily' Value='Segoe UI, Microsoft YaHei UI, Microsoft YaHei'/>
-    <Setter Property='FontSize' Value='12'/>
-    <Setter Property='Padding' Value='10,7,9,7'/>
+    <Setter Property='FontSize' Value='14'/>
+    <Setter Property='Padding' Value='12,8,11,8'/>
     <Setter Property='HeaderTemplate'>
       <Setter.Value>
         <DataTemplate><TextBlock Text='{Binding}' TextTrimming='CharacterEllipsis'/></DataTemplate>
       </Setter.Value>
     </Setter>
-    <Setter Property='MinHeight' Value='31'/>
+    <Setter Property='MinHeight' Value='36'/>
     <Setter Property='HorizontalContentAlignment' Value='Stretch'/>
     <Setter Property='VerticalContentAlignment' Value='Center'/>
     <Setter Property='FocusVisualStyle' Value='{x:Null}'/>
@@ -109,11 +109,11 @@ namespace DesktopTodo
             <Border x:Name='ItemSurface' Background='{TemplateBinding Background}' CornerRadius='6' Padding='{TemplateBinding Padding}'>
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='14'/>
+                  <ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='16'/>
                 </Grid.ColumnDefinitions>
                 <ContentPresenter x:Name='HeaderPresenter' ContentSource='Header' RecognizesAccessKey='True'
                                   VerticalAlignment='Center' Margin='0,0,4,0' ClipToBounds='True'/>
-                <TextBlock Grid.Column='1' Text='{TemplateBinding InputGestureText}' Margin='8,0,5,0' FontSize='10'
+                <TextBlock Grid.Column='1' Text='{TemplateBinding InputGestureText}' Margin='8,0,5,0' FontSize='12'
                            Foreground='{DynamicResource MenuMuted}' VerticalAlignment='Center'/>
                 <Path x:Name='CheckMark' Grid.Column='2' Data='M 1,5 L 4,8 L 10,1' Stroke='{TemplateBinding Foreground}'
                       StrokeThickness='1.5' StrokeStartLineCap='Round' StrokeEndLineCap='Round' StrokeLineJoin='Round'
@@ -126,7 +126,7 @@ namespace DesktopTodo
             <Popup x:Name='PART_Popup' Placement='Right' HorizontalOffset='2' VerticalOffset='-4' Focusable='False'
                    AllowsTransparency='True' PopupAnimation='None' IsOpen='{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}'>
               <Border Background='{DynamicResource MenuSurface}' BorderBrush='{DynamicResource MenuLine}' BorderThickness='1'
-                      CornerRadius='10' Padding='4' MinWidth='220' MaxWidth='240' MaxHeight='520'>
+                      CornerRadius='10' Padding='4' MinWidth='240' MaxWidth='260' MaxHeight='520'>
                 <ScrollViewer CanContentScroll='True' VerticalScrollBarVisibility='Auto' HorizontalScrollBarVisibility='Disabled'
                               Focusable='False' Background='Transparent' BorderThickness='0'>
                   <ItemsPresenter x:Name='ItemsPresenter' KeyboardNavigation.DirectionalNavigation='Cycle' SnapsToDevicePixels='True'/>

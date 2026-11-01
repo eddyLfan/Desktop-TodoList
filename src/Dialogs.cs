@@ -104,7 +104,7 @@ namespace DesktopTodo
   <Setter Property='Background' Value='{StaticResource Field}'/>
   <Setter Property='BorderBrush' Value='Transparent'/>
   <Setter Property='BorderThickness' Value='1'/>
-  <Setter Property='Padding' Value='13,7'/>
+  <Setter Property='Padding' Value='14,8'/>
   <Setter Property='Cursor' Value='Hand'/>
   <Setter Property='HorizontalContentAlignment' Value='Center'/>
   <Setter Property='VerticalContentAlignment' Value='Center'/>
@@ -146,7 +146,7 @@ namespace DesktopTodo
   <Setter Property='Background' Value='{StaticResource Field}'/>
   <Setter Property='BorderBrush' Value='Transparent'/>
   <Setter Property='BorderThickness' Value='1'/>
-  <Setter Property='Padding' Value='10,8'/>
+  <Setter Property='Padding' Value='11,9'/>
   <Setter Property='VerticalContentAlignment' Value='Center'/>
   <Setter Property='SelectionBrush' Value='{StaticResource Selected}'/>
   <Setter Property='Template' Value='{StaticResource InputTemplate}'/>
@@ -162,9 +162,9 @@ namespace DesktopTodo
   <Setter Property='Template'><Setter.Value>
    <ControlTemplate TargetType='{x:Type CheckBox}'>
     <Grid Background='Transparent'>
-     <Grid.ColumnDefinitions><ColumnDefinition Width='19'/><ColumnDefinition Width='*'/></Grid.ColumnDefinitions>
-     <Border x:Name='Box' Width='17' Height='17' CornerRadius='5' BorderBrush='{StaticResource Line}' BorderThickness='1' Background='{StaticResource Field}' VerticalAlignment='Center'>
-      <TextBlock x:Name='Tick' Text='✓' Foreground='{StaticResource AccentInk}' FontSize='12' HorizontalAlignment='Center' VerticalAlignment='Center' Visibility='Collapsed'/>
+     <Grid.ColumnDefinitions><ColumnDefinition Width='21'/><ColumnDefinition Width='*'/></Grid.ColumnDefinitions>
+     <Border x:Name='Box' Width='19' Height='19' CornerRadius='5' BorderBrush='{StaticResource Line}' BorderThickness='1' Background='{StaticResource Field}' VerticalAlignment='Center'>
+      <TextBlock x:Name='Tick' Text='✓' Foreground='{StaticResource AccentInk}' FontSize='13' HorizontalAlignment='Center' VerticalAlignment='Center' Visibility='Collapsed'/>
      </Border>
      <ContentPresenter Grid.Column='1' Margin='9,0,0,0' VerticalAlignment='Center' RecognizesAccessKey='True'/>
     </Grid>
@@ -212,8 +212,8 @@ namespace DesktopTodo
  <Style x:Key='CalendarDay' TargetType='{x:Type CalendarDayButton}'>
   <Setter Property='Foreground' Value='{StaticResource Ink}'/>
   <Setter Property='Background' Value='Transparent'/>
-  <Setter Property='MinWidth' Value='30'/>
-  <Setter Property='MinHeight' Value='29'/>
+  <Setter Property='MinWidth' Value='34'/>
+  <Setter Property='MinHeight' Value='32'/>
   <Setter Property='Template'><Setter.Value>
    <ControlTemplate TargetType='{x:Type CalendarDayButton}'>
     <Border x:Name='Day' CornerRadius='6' Background='{TemplateBinding Background}' Margin='1' BorderThickness='1' BorderBrush='Transparent'>
@@ -248,7 +248,7 @@ namespace DesktopTodo
    <ControlTemplate TargetType='{x:Type CalendarItem}'>
     <Border Background='{StaticResource Surface}' BorderBrush='{StaticResource Line}' BorderThickness='1' CornerRadius='10' Padding='10'>
      <Grid x:Name='PART_Root'>
-      <Grid.Resources><DataTemplate x:Key='{x:Static CalendarItem.DayTitleTemplateResourceKey}'><TextBlock Text='{Binding}' HorizontalAlignment='Center' Foreground='{StaticResource Muted}' FontSize='11' Margin='0,5'/></DataTemplate></Grid.Resources>
+      <Grid.Resources><DataTemplate x:Key='{x:Static CalendarItem.DayTitleTemplateResourceKey}'><TextBlock Text='{Binding}' HorizontalAlignment='Center' Foreground='{StaticResource Muted}' FontSize='12' Margin='0,5'/></DataTemplate></Grid.Resources>
       <Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='Auto'/></Grid.RowDefinitions>
       <Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/></Grid.ColumnDefinitions>
       <Button x:Name='PART_PreviousButton' Content='‹' Style='{StaticResource Quiet}' Width='30' Height='30' FontSize='20'/>
@@ -268,6 +268,7 @@ namespace DesktopTodo
   </Setter.Value></Setter>
  </Style>
  <Style x:Key='PickerCalendar' TargetType='{x:Type Calendar}'>
+  <Setter Property='FontSize' Value='14'/>
   <Setter Property='Foreground' Value='{StaticResource Ink}'/>
   <Setter Property='Background' Value='{StaticResource Surface}'/>
   <Setter Property='BorderThickness' Value='0'/>
@@ -305,11 +306,11 @@ namespace DesktopTodo
         {
             Window window = new Window
             {
-                Title = title, Width = 340, SizeToContent = SizeToContent.Height,
+                Title = title, Width = 400, SizeToContent = SizeToContent.Height,
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
                 AllowsTransparency = true, Background = Brushes.Transparent,
                 Foreground = B(p.Ink), ShowInTaskbar = false, Topmost = true,
-                FontFamily = new FontFamily("Microsoft YaHei UI"), FontSize = 13,
+                FontFamily = new FontFamily("Microsoft YaHei UI"), FontSize = 15,
                 WindowStartupLocation = WindowStartupLocation.Manual
             };
             if (owner != null && owner.IsVisible)
@@ -357,21 +358,21 @@ namespace DesktopTodo
         private static StackPanel Body(Window window, string title, string subtitle, Palette p)
         {
             Border shell = new Border { CornerRadius = new CornerRadius(10), Background = B(p.Surface), BorderBrush = B(p.Line), BorderThickness = new Thickness(1) };
-            StackPanel body = new StackPanel { Margin = new Thickness(16, 13, 16, 16) };
+            StackPanel body = new StackPanel { Margin = new Thickness(18, 15, 18, 18) };
             shell.Child = body;
             window.Content = shell;
             Grid header = new Grid { Margin = new Thickness(0, 0, 0, 10), Background = Brushes.Transparent };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             StackPanel titles = new StackPanel();
-            titles.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.Medium, Foreground = B(p.Ink) });
-            if (!string.IsNullOrEmpty(subtitle)) titles.Children.Add(new TextBlock { Text = subtitle, Foreground = B(p.Muted), FontSize = 11, Margin = new Thickness(0, 5, 10, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 270 });
+            titles.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Medium, Foreground = B(p.Ink) });
+            if (!string.IsNullOrEmpty(subtitle)) titles.Children.Add(new TextBlock { Text = subtitle, Foreground = B(p.Muted), FontSize = 13, Margin = new Thickness(0, 5, 10, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             header.Children.Add(titles);
             Button close = Button(window, "×", false);
             close.Style = (Style)window.Resources["Quiet"];
-            close.FontSize = 18;
-            close.Width = 24;
-            close.Height = 24;
+            close.FontSize = 20;
+            close.Width = 28;
+            close.Height = 28;
             close.MinWidth = 0;
             close.Margin = new Thickness(6, -3, -3, 0);
             close.VerticalAlignment = VerticalAlignment.Top;
@@ -393,7 +394,7 @@ namespace DesktopTodo
 
         private static TextBlock Label(string text, Palette p)
         {
-            return new TextBlock { Text = text, Foreground = B(p.Muted), FontSize = 12, Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
+            return new TextBlock { Text = text, Foreground = B(p.Muted), FontSize = 13, Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
         }
         private static TextBox Input(Window window, string name)
         {
@@ -409,7 +410,7 @@ namespace DesktopTodo
         }
         private static TextBlock ErrorText(StackPanel body, Palette p)
         {
-            TextBlock error = new TextBlock { Foreground = B(p.Error), TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
+            TextBlock error = new TextBlock { Foreground = B(p.Error), TextWrapping = TextWrapping.Wrap, FontSize = 13, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
             AutomationProperties.SetName(error, "输入提示");
             body.Children.Add(error);
             return error;
@@ -417,7 +418,7 @@ namespace DesktopTodo
         private static void Error(TextBlock text, string message) { text.Text = message; text.Visibility = Visibility.Visible; }
         private static Button Actions(Window window, StackPanel body, string saveLabel)
         {
-            StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+            StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
             Button cancel = Button(window, "取消", false);
             cancel.IsCancel = true;
             cancel.Margin = new Thickness(0, 0, 8, 0);
@@ -432,7 +433,7 @@ namespace DesktopTodo
         {
             Palette p = Colors(owner, null);
             Window window = CreateWindow(owner, title, p);
-            window.Width = 340;
+            window.Width = 380;
             StackPanel body = Body(window, title, null, p);
             TextBox name = Input(window, "分类名称");
             name.Text = initial ?? "";
@@ -464,8 +465,8 @@ namespace DesktopTodo
             title.Text = item == null ? "" : item.Title ?? "";
             title.AcceptsReturn = true;
             title.TextWrapping = TextWrapping.Wrap;
-            title.MinHeight = 62;
-            title.MaxHeight = 110;
+            title.MinHeight = 74;
+            title.MaxHeight = 132;
             title.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
             title.MaxLength = 500;
             title.VerticalContentAlignment = VerticalAlignment.Top;
@@ -482,7 +483,7 @@ namespace DesktopTodo
             Grid dateRow = new Grid();
             dateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             dateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            dateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
+            dateRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
             DatePicker date = new DatePicker
             {
                 SelectedDate = localDue.Date, SelectedDateFormat = DatePickerFormat.Short,
@@ -545,7 +546,7 @@ namespace DesktopTodo
             opacityHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             opacityHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             opacityHeader.Children.Add(Label("底板不透明度", p));
-            TextBlock valueLabel = new TextBlock { Foreground = B(p.Ink), FontSize = 12, TextAlignment = TextAlignment.Right };
+            TextBlock valueLabel = new TextBlock { Foreground = B(p.Ink), FontSize = 13, TextAlignment = TextAlignment.Right };
             Grid.SetColumn(valueLabel, 1);
             opacityHeader.Children.Add(valueLabel);
             body.Children.Add(opacityHeader);
@@ -604,7 +605,7 @@ namespace DesktopTodo
         {
             Palette p = Colors(owner, null);
             Window window = CreateWindow(owner, title, p);
-            window.Width = 340;
+            window.Width = 380;
             StackPanel body = Body(window, title, null, p);
             body.Children.Add(MessageContent(message, p));
             Button confirm = Actions(window, body, "确认");
@@ -618,14 +619,14 @@ namespace DesktopTodo
         {
             Palette p = Colors(owner, null);
             Window window = CreateWindow(owner, title, p);
-            window.Width = 340;
+            window.Width = 380;
             StackPanel body = Body(window, title, null, p);
             body.Children.Add(MessageContent(message, p));
             Button dismiss = Button(window, "知道了", true);
             dismiss.IsCancel = true;
             dismiss.IsDefault = true;
             dismiss.HorizontalAlignment = HorizontalAlignment.Right;
-            dismiss.Margin = new Thickness(0, 14, 0, 0);
+            dismiss.Margin = new Thickness(0, 16, 0, 0);
             body.Children.Add(dismiss);
             window.ShowDialog();
         }
@@ -635,7 +636,7 @@ namespace DesktopTodo
             TextBlock text = new TextBlock
             {
                 Text = message ?? "", Foreground = B(p.Muted), TextWrapping = TextWrapping.Wrap,
-                FontSize = 13, LineHeight = 22
+                FontSize = 15, LineHeight = 25
             };
             return new ScrollViewer
             {
