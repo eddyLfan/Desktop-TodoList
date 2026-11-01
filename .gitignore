@@ -1,0 +1,15 @@
+/work/
+/outputs/
+/artifacts/
+.vs/
+*.user
+*.suo
+*.exe
+*.dll
+*.pdb
+data.json
+data.backup.json
+data.corrupt*.json
+/archive/
+error.log
+startup-trace.log

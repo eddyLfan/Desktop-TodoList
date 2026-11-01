@@ -1,0 +1,174 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Validate version tag
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_REF_TYPE -ne 'tag' -or $env:RELEASE_TAG -cnotmatch '^v\d+\.\d+\.\d+$') {
+            throw 'Release tags must use vMAJOR.MINOR.PATCH, for example v1.0.0.'
+          }
+
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and run regression checks
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -RunTests
+          if ($LASTEXITCODE -ne 0) { throw 'Build or regression checks failed.' }
+
+      - name: Package approved application files
+        id: package
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'outputs\DesktopTodo'
+          $releaseRoot = Join-Path $env:RUNNER_TEMP ('desktop-todo-release-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT)
+          $package = Join-Path $releaseRoot 'package\DesktopTodo'
+          $assetDirectory = Join-Path $releaseRoot 'assets'
+          New-Item -ItemType Directory -Path $package,$assetDirectory -Force | Out-Null
+          # Only these files may enter a release; no data, archives, logs, or test output.
+          $approved = @(
+            'DesktopTodo.exe',
+            'DesktopTodo.exe.config',
+            '使用说明.md',
+            'assets\logo.svg',
+            'assets\logo.png',
+            'assets\DesktopTodo.ico'
+          )
+          foreach ($relative in $approved) {
+            $inputFile = Join-Path $source $relative
+            if (-not (Test-Path -LiteralPath $inputFile -PathType Leaf)) {
+              throw ('Required release file is missing: ' + $relative)
+            }
+            $destination = Join-Path $package $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $inputFile -Destination $destination
+          }
+          $zipName = 'DesktopTodo-' + $env:RELEASE_TAG + '-Windows.zip'
+          $zipPath = Join-Path $assetDirectory $zipName
+          Compress-Archive -LiteralPath $package -DestinationPath $zipPath -CompressionLevel Optimal
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $actual = @($zip.Entries | Where-Object { $_.Name } | ForEach-Object { $_.FullName.Replace('\','/') } | Sort-Object)
+            $expected = @($approved | ForEach-Object { 'DesktopTodo/' + $_.Replace('\','/') } | Sort-Object)
+            if (@(Compare-Object -ReferenceObject $expected -DifferenceObject $actual).Count -ne 0) {
+              throw 'The ZIP contents do not match the release allowlist.'
+            }
+          } finally { $zip.Dispose() }
+          Copy-Item -LiteralPath (Join-Path $package 'DesktopTodo.exe') -Destination $assetDirectory
+          $checksumNames = @('DesktopTodo.exe',$zipName)
+          $lines = foreach ($name in $checksumNames) {
+            $hash = (Get-FileHash -LiteralPath (Join-Path $assetDirectory $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hash + '  ' + $name
+          }
+          [IO.File]::WriteAllText((Join-Path $assetDirectory 'SHA256SUMS.txt'), ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+          'asset-directory=' + $assetDirectory | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload draft assets and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_DIRECTORY: ${{ steps.package.outputs.asset-directory }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw 'GITHUB_TOKEN is unavailable.' }
+          if ($env:RELEASE_TAG -cnotmatch '^v\d+\.\d+\.\d+$') { throw 'Invalid release tag.' }
+          $headers = @{
+            Authorization = 'Bearer ' + $env:GH_TOKEN
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2026-03-10'
+          }
+          function Invoke-GitHubJson {
+            param([string]$Method, [string]$Uri, [hashtable]$Body)
+            $request = @{ Method=$Method; Uri=$Uri; Headers=$headers; ErrorAction='Stop' }
+            if ($null -ne $Body) {
+              $request.ContentType = 'application/json; charset=utf-8'
+              $request.Body = [Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 8 -Compress))
+            }
+            try { Invoke-RestMethod @request }
+            catch { throw ('GitHub REST request failed: ' + $Method + ' ' + $Uri + '. No published assets were overwritten.') }
+          }
+          $releasesUrl = $env:GITHUB_API_URL.TrimEnd('/') + '/repos/' + $env:GITHUB_REPOSITORY + '/releases'
+          # Listing includes drafts for this write-scoped token. Stop rather than overwrite either kind.
+          $page = 1
+          do {
+            $existing = @(Invoke-GitHubJson -Method Get -Uri ($releasesUrl + '?per_page=100&page=' + $page))
+            foreach ($release in $existing) {
+              if ($release.tag_name -ceq $env:RELEASE_TAG) {
+                if ($release.draft) { throw 'A draft already exists for this tag. Inspect or remove that draft before rerunning; this workflow does not replace releases.' }
+                throw 'A public release already exists for this tag. Publish a new version instead of replacing its assets.'
+              }
+            }
+            $page++
+          } while ($existing.Count -eq 100)
+
+          $notesPath = Join-Path $env:GITHUB_WORKSPACE 'docs\release-notes.md'
+          $notes = [IO.File]::ReadAllText($notesPath, [Text.Encoding]::UTF8).Replace('{{VERSION}}', $env:RELEASE_TAG)
+          $assetNames = @('DesktopTodo.exe',('DesktopTodo-' + $env:RELEASE_TAG + '-Windows.zip'),'SHA256SUMS.txt')
+          foreach ($name in $assetNames) {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:ASSET_DIRECTORY $name) -PathType Leaf)) { throw ('Missing asset: ' + $name) }
+          }
+          $draft = Invoke-GitHubJson -Method Post -Uri $releasesUrl -Body @{
+            tag_name=$env:RELEASE_TAG
+            target_commitish=$env:GITHUB_SHA
+            name=$env:RELEASE_TAG
+            body=$notes
+            draft=$true
+            prerelease=$false
+            generate_release_notes=$false
+          }
+          if (-not $draft.draft) { throw 'The API did not create a draft release as requested.' }
+          $releaseUrl = $releasesUrl + '/' + $draft.id
+          $uploadBase = $draft.upload_url -replace '\{.*\}$',''
+          $uploadUri = [Uri]$uploadBase
+          if ($uploadUri.Scheme -ne 'https' -or $uploadUri.Host -ne 'uploads.github.com') {
+            throw 'Unexpected asset upload host; the release remains a draft.'
+          }
+          try {
+            foreach ($name in $assetNames) {
+              $file = Get-Item -LiteralPath (Join-Path $env:ASSET_DIRECTORY $name)
+              $contentType = if ($name.EndsWith('.zip')) { 'application/zip' } elseif ($name.EndsWith('.txt')) { 'text/plain; charset=utf-8' } else { 'application/octet-stream' }
+              try {
+                $uploaded = Invoke-RestMethod -Method Post -Uri ($uploadBase + '?name=' + [Uri]::EscapeDataString($name)) -Headers $headers -ContentType $contentType -InFile $file.FullName -ErrorAction Stop
+              } catch { throw ('Asset upload failed: ' + $name) }
+              if ($uploaded.state -ne 'uploaded' -or $uploaded.name -cne $name -or $uploaded.size -ne $file.Length) { throw ('Asset verification failed: ' + $name) }
+              $localDigest = 'sha256:' + (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($uploaded.PSObject.Properties.Name -contains 'digest') {
+                if ($uploaded.digest -and $uploaded.digest -cne $localDigest) { throw ('Asset checksum mismatch: ' + $name) }
+              }
+            }
+            $remoteAssets = @(Invoke-GitHubJson -Method Get -Uri ($releaseUrl + '/assets?per_page=100'))
+            if ($remoteAssets.Count -ne $assetNames.Count -or @($remoteAssets | Where-Object { $_.state -ne 'uploaded' }).Count -ne 0) { throw 'The draft asset set is incomplete.' }
+            if (@(Compare-Object -ReferenceObject ($assetNames | Sort-Object) -DifferenceObject ($remoteAssets.name | Sort-Object)).Count -ne 0) { throw 'Unexpected draft assets; publication cancelled.' }
+            $published = Invoke-GitHubJson -Method Patch -Uri $releaseUrl -Body @{ draft=$false; make_latest='true' }
+            if ($published.draft) { throw 'The release is still a draft.' }
+            ('Published: ' + $published.html_url) | Write-Output
+            ('[Download ' + $env:RELEASE_TAG + '](' + $published.html_url + ')') | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          } catch {
+            Write-Warning ('Publication did not complete. Inspect release ID ' + $draft.id + ' before rerunning; uploaded assets were not deleted.')
+            throw
+          }

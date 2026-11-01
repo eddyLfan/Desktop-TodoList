@@ -1,0 +1,52 @@
+# 验证记录
+
+## 自动化检查
+
+在 Windows PowerShell 中运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -RunTests
+```
+
+本地构建通过。存储与倒计时检查共 14 组，全部通过：
+
+1. 空白初始数据及默认设置。
+2. 中文、特殊字符和日期的 JSON 往返保存。
+3. 30 天保留边界及未完成事项保留。
+4. 已删除事项按删除日期归档。
+5. 中断后重复归档不产生重复记录。
+6. 归档文件损坏时保留当前事项。
+7. 当前文件损坏时恢复备份并保留异常原件。
+8. 无有效备份时不覆盖损坏数据。
+9. 遇到较新数据版本时不回退到旧备份。
+10. 清理备份中过期的完成记录。
+11. 不删除归档目录中的未知用户文件。
+12. 备份写入失败时当前文件保持不变。
+13. 当前归档提交失败时恢复内存，重试后不丢失记录。
+14. DDL 阶段边界、倒计时、恢复后重算及已完成事项停止提醒。
+
+两主题 UI 检查也已通过：
+
+- 对话框：浅色、深色共 26 个控件的离屏布局与模板检查，包括日期选择器、滑块所需模板部件。
+- 菜单：浅色、深色共 46 个模板检查，渲染托盘、主菜单及子菜单示例，覆盖勾选、禁用和长文本边界；结果为 `work/menu-preview.png`。
+
+这些检查不打开桌面窗口，也不替代鼠标、键盘、输入法和焦点的实机验收。GitHub Actions 配置为执行相同命令；远程结果以对应工作流记录为准。
+
+## 实机状态
+
+用户已在本机 Windows 环境确认小组件能在桌面显示并点击。桌面模式保持正常 WPF 顶层透明绘制，通过观察桌面窗口层级调整自身位置。
+
+单 exe 启动已在不提供 `.exe.config` 的环境中检查：程序持续运行并响应，无启动错误日志，已有数据的 SHA-256 保持不变。两条 WPF DPI 开关在独立入口中先设置，再进入 WPF 初始化；程序仍依赖系统 .NET Framework。
+
+**Win+D 切换、混合 DPI 多屏场景尚未完成实机验证。** Windows 10 的桌面交互也未单独验收；Windows CI 构建成功不代表这些交互已验证。
+
+## CI 依赖
+
+普通构建工作流仅有 `contents: read` 权限；标签发布流程仅在发布任务授予 `contents: write`，用于创建 Release 和上传资产。构建附件只包含程序、可选运行配置、图标和使用说明，不上传待办数据、测试数据或日志。
+
+Action 的稳定版本与提交 SHA 于 2026-11-01 从官方仓库核实后固定：
+
+- [actions/checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1)：`3d3c42e5aac5ba805825da76410c181273ba90b1`。
+- [actions/upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2)：`cf430e030ddbb5b0abf93d22962f4752f3646cd9`。
+
+使用的 [windows-2022 官方镜像](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md) 已列出 .NET Framework 4.8。

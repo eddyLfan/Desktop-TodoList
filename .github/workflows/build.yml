@@ -1,0 +1,40 @@
+name: Windows build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and run regression checks
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -RunTests
+
+      - name: Upload application
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DesktopTodo-Windows
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            outputs/DesktopTodo/DesktopTodo.exe
+            outputs/DesktopTodo/DesktopTodo.exe.config
+            outputs/DesktopTodo/assets/logo.svg
+            outputs/DesktopTodo/assets/logo.png
+            outputs/DesktopTodo/assets/DesktopTodo.ico
+            outputs/DesktopTodo/使用说明.md
