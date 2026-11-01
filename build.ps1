@@ -95,4 +95,5 @@ if ($RunTests) {
         & $checkExe @checkArguments
         if ($LASTEXITCODE -ne 0) { throw ($check.Name + ' 检查失败。') }
     }
+    & (Join-Path $projectRoot 'tests\ReleaseWorkflowTests.ps1')
 }

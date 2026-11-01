@@ -4,11 +4,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish
+        required: true
+        type: string
 
 permissions: {}
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -21,18 +27,21 @@ jobs:
       run:
         shell: pwsh
     env:
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Validate version tag
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:GITHUB_REF_TYPE -ne 'tag' -or $env:RELEASE_TAG -cnotmatch '^v\d+\.\d+\.\d+$') {
+          $isTagPush = $env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF_TYPE -eq 'tag'
+          $isManual = $env:GITHUB_EVENT_NAME -eq 'workflow_dispatch'
+          if ((-not $isTagPush -and -not $isManual) -or $env:RELEASE_TAG -cnotmatch '^v\d+\.\d+\.\d+$') {
             throw 'Release tags must use vMAJOR.MINOR.PATCH, for example v1.0.0.'
           }
 
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - name: Build and run regression checks
@@ -109,7 +118,16 @@ jobs:
               $request.ContentType = 'application/json; charset=utf-8'
               $request.Body = [Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 8 -Compress))
             }
-            try { Invoke-RestMethod @request }
+            try {
+              # Invoke-RestMethod emits JSON arrays as one pipeline object, even when empty.
+              # Enumerate top-level arrays here so callers using @(...) receive their entries.
+              $response = Invoke-RestMethod @request
+              if ($response -is [System.Array]) {
+                foreach ($entry in $response) { Write-Output $entry }
+              } elseif ($null -ne $response) {
+                Write-Output -NoEnumerate $response
+              }
+            }
             catch { throw ('GitHub REST request failed: ' + $Method + ' ' + $Uri + '. No published assets were overwritten.') }
           }
           $releasesUrl = $env:GITHUB_API_URL.TrimEnd('/') + '/repos/' + $env:GITHUB_REPOSITORY + '/releases'
@@ -132,9 +150,11 @@ jobs:
           foreach ($name in $assetNames) {
             if (-not (Test-Path -LiteralPath (Join-Path $env:ASSET_DIRECTORY $name) -PathType Leaf)) { throw ('Missing asset: ' + $name) }
           }
+          $releaseCommit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $releaseCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot determine the checked-out tag commit.' }
           $draft = Invoke-GitHubJson -Method Post -Uri $releasesUrl -Body @{
             tag_name=$env:RELEASE_TAG
-            target_commitish=$env:GITHUB_SHA
+            target_commitish=$releaseCommit
             name=$env:RELEASE_TAG
             body=$notes
             draft=$true
