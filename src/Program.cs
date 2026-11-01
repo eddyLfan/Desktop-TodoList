@@ -16,8 +16,8 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("桌面待办")]
 [assembly: AssemblyDescription("简约透明的本地桌面待办")]
 [assembly: AssemblyProduct("DesktopTodo")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
 
 namespace DesktopTodo
 {
@@ -204,7 +204,7 @@ namespace DesktopTodo
         {
             if (exiting) return;
             if (trayMenu != null) trayMenu.IsOpen = false;
-            ContextMenu menu = MenuStyles.Create(MenuStyles.IsDark(repository.State.Settings.Theme));
+            ContextMenu menu = MenuStyles.Create(MenuStyles.IsDark(repository.State.Settings.Theme), repository.State.Settings.UiScale);
             trayMenu = menu;
             AddTrayItem(menu, window.IsVisible ? "隐藏待办" : "显示待办", delegate
             {

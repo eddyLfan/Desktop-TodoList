@@ -59,6 +59,8 @@ namespace DesktopTodo
         private SolidColorBrush field;
         private bool dark;
         private bool locating;
+        private double? previewUiScale;
+        private readonly ScaleTransform contentScale = new ScaleTransform();
         private DateTimeOffset lastTick;
         private int lastReminderStage = -1;
         private string reminderItemId;
@@ -95,6 +97,7 @@ namespace DesktopTodo
             SnapsToDevicePixels = true;
 
             shell = new Border { Padding = new Thickness(20, 16, 20, 16), CornerRadius = new CornerRadius(12) };
+            shell.LayoutTransform = contentScale;
             layout = new Grid();
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -102,7 +105,7 @@ namespace DesktopTodo
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             shell.Child = layout;
-            Content = shell;
+            Content = new Grid { Children = { shell } };
 
             Grid header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -342,6 +345,8 @@ namespace DesktopTodo
 
         public void ApplySettings()
         {
+            ApplyScale(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+            if (IsLoaded) PositionAtTopRight();
             dark = state.Settings.Theme == "dark" || (state.Settings.Theme != "light" && SystemIsDark());
             ink = dark ? Brush(238, 243, 239) : Brush(36, 47, 40);
             muted = dark ? Brush(193, 206, 196) : Brush(77, 94, 83);
@@ -934,7 +939,7 @@ namespace DesktopTodo
 
         private ContextMenu Menu()
         {
-            return MenuStyles.Create(dark);
+            return MenuStyles.Create(dark, UiScaling.GetScale(this));
         }
 
         private static MenuItem AddMenuItem(ItemsControl menu, string title, Action action)
@@ -987,10 +992,26 @@ namespace DesktopTodo
 
         public void ShowSettings()
         {
-            SettingsEditResult result = TodoDialogs.EditSettings(this, state.Settings);
+            SettingsEditResult result;
+            try
+            {
+                result = TodoDialogs.EditSettings(this, state.Settings, delegate(double scale)
+                {
+                    previewUiScale = scale;
+                    ApplyScale(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+                    PositionAtTopRight();
+                });
+            }
+            finally
+            {
+                previewUiScale = null;
+                ApplyScale(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+                PositionAtTopRight();
+            }
             if (result == null) return;
             Commit(delegate
             {
+                state.Settings.UiScale = result.UiScale;
                 state.Settings.BackgroundOpacity = result.BackgroundOpacity;
                 state.Settings.Theme = result.Theme;
                 state.Settings.Animations = result.Animations;
@@ -1040,6 +1061,7 @@ namespace DesktopTodo
                 }).ToList(),
                 Settings = new AppSettings
                 {
+                    UiScale = state.Settings.UiScale,
                     BackgroundOpacity = state.Settings.BackgroundOpacity,
                     Topmost = state.Settings.Topmost,
                     Animations = state.Settings.Animations,
@@ -1074,6 +1096,24 @@ namespace DesktopTodo
             return IntPtr.Zero;
         }
 
+        private void ApplyScale(double workWidth, double workHeight)
+        {
+            double requested = previewUiScale ?? state.Settings.UiScale;
+            double scale = UiScaling.FitToWidth(requested, 400, workWidth - 40);
+            // Reserve enough unscaled space for wrapped categories, a reminder,
+            // the add/undo controls and at least one row on very short screens.
+            scale = Math.Min(scale, Math.Max(1, workHeight - 40) / 420);
+            UiScaling.SetScale(this, requested);
+            contentScale.ScaleX = contentScale.ScaleY = scale;
+            // Heights inside the transformed shell are in unscaled coordinates.
+            // Keep the footer reachable on shorter work areas by scrolling the list.
+            double allowedHeight = Math.Max(1, workHeight - 40);
+            MinHeight = Math.Min(150 * scale, allowedHeight);
+            MaxHeight = Math.Min(600 * scale, allowedHeight);
+            Width = 400 * scale;
+            listScroll.MaxHeight = Math.Max(40, MaxHeight / scale - 190);
+        }
+
         private void PositionAtTopRight()
         {
             if (locating) return;
@@ -1087,7 +1127,8 @@ namespace DesktopTodo
                 info.Size = Marshal.SizeOf(typeof(MonitorInfo));
                 if (!GetMonitorInfo(monitor, ref info))
                 {
-                    Left = SystemParameters.WorkArea.Right - ActualWidth - 20;
+                    ApplyScale(SystemParameters.WorkArea.Width, SystemParameters.WorkArea.Height);
+                    Left = SystemParameters.WorkArea.Right - Width - 20;
                     Top = SystemParameters.WorkArea.Top + 20;
                     return;
                 }
@@ -1095,10 +1136,8 @@ namespace DesktopTodo
                 HwndSource source = HwndSource.FromHwnd(hwnd);
                 if (source != null && source.CompositionTarget != null) scale = source.CompositionTarget.TransformToDevice.M11;
                 if (scale <= 0) scale = 1;
-                double allowedHeight = Math.Max(160, (info.Work.Bottom - info.Work.Top) / scale - 40);
-                MaxHeight = Math.Min(600, allowedHeight);
-                listScroll.MaxHeight = Math.Max(100, MaxHeight - 190);
-                int widthPixels = (int)Math.Round((ActualWidth > 0 ? ActualWidth : Width) * scale);
+                ApplyScale((info.Work.Right - info.Work.Left) / scale, (info.Work.Bottom - info.Work.Top) / scale);
+                int widthPixels = (int)Math.Round(Width * scale);
                 int margin = (int)Math.Round(20 * scale);
                 if (desktopLayer != null) desktopLayer.Position(info.Work.Right - widthPixels - margin, info.Work.Top + margin);
                 else SetWindowPos(hwnd, IntPtr.Zero, info.Work.Right - widthPixels - margin, info.Work.Top + margin, 0, 0, 0x0015);

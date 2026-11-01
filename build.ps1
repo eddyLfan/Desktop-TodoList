@@ -84,8 +84,9 @@ if ($RunTests) {
     } finally { Pop-Location }
     $additionalChecks = @(
         @{ Name='TodoOrderTests'; Sources=@('src\Models.cs','src\Storage.cs','src\Deadline.cs','src\TodoOrder.cs','tests\TodoOrderTests.cs'); Arguments=@() },
-        @{ Name='DialogTemplateTests'; Sources=@('src\Models.cs','src\Dialogs.cs','tests\DialogTemplateTests.cs'); Arguments=@() },
-        @{ Name='MenuTemplateTests'; Sources=@('src\MenuStyles.cs','tests\MenuTemplateTests.cs'); Arguments=@((Join-Path $workDir 'menu-preview.png')) }
+        @{ Name='DialogTemplateTests'; Sources=@('src\Models.cs','src\UiScaling.cs','src\Dialogs.cs','tests\DialogTemplateTests.cs'); Arguments=@() },
+        @{ Name='MenuTemplateTests'; Sources=@('src\Models.cs','src\UiScaling.cs','src\MenuStyles.cs','tests\MenuTemplateTests.cs'); Arguments=@((Join-Path $workDir 'menu-preview.png')) },
+        @{ Name='ScaleLayoutTests'; Sources=@('src\Models.cs','src\UiScaling.cs','src\Dialogs.cs','src\MenuStyles.cs','src\MainWindow.cs','src\DesktopLayer.cs','src\TodoOrder.cs','src\Deadline.cs','tests\ScaleLayoutTests.cs'); Arguments=@((Join-Path $workDir 'scale-layout-preview.png')) }
     )
     foreach ($check in $additionalChecks) {
         $checkExe = Join-Path $workDir ($check.Name + '.exe')

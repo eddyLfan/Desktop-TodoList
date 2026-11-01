@@ -38,7 +38,11 @@ namespace DesktopTodo
 
     public sealed class AppSettings
     {
+        public const double MinimumUiScale = 0.8;
+        public const double MaximumUiScale = 1.5;
+
         public double BackgroundOpacity { get; set; }
+        public double UiScale { get; set; }
         public bool Topmost { get; set; }
         public bool Animations { get; set; }
         public bool StartWithWindows { get; set; }
@@ -49,9 +53,16 @@ namespace DesktopTodo
         public AppSettings()
         {
             BackgroundOpacity = 0.35;
+            UiScale = 1.0;
             Animations = true;
             Theme = "auto";
             ActiveCategoryId = "inbox";
+        }
+
+        public static double NormalizeUiScale(double value)
+        {
+            if (Double.IsNaN(value) || Double.IsInfinity(value) || value <= 0) return 1.0;
+            return Math.Max(MinimumUiScale, Math.Min(MaximumUiScale, value));
         }
     }
 

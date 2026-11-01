@@ -15,7 +15,7 @@ namespace DesktopTodo
     // One menu surface for the widget, nested menus and the notification area.
     internal static class MenuStyles
     {
-        public static ContextMenu Create(bool dark)
+        public static ContextMenu Create(bool dark, double scale = 1)
         {
             var resources = (ResourceDictionary)XamlReader.Parse(Templates);
             resources["MenuSurface"] = Brush(dark ? "#DC222A25" : "#DCF8FBF7");
@@ -24,10 +24,42 @@ namespace DesktopTodo
             resources["MenuDisabled"] = Brush(dark ? "#718077" : "#98A49B");
             resources["MenuHover"] = Brush(dark ? "#286E9A7A" : "#184F775A");
             resources["MenuLine"] = Brush(dark ? "#2BBACABB" : "#24475F4D");
+            resources["MenuMaxHeight"] = 520.0;
             var menu = new ContextMenu { Resources = resources, StaysOpen = false };
             menu.Style = (Style)resources[typeof(ContextMenu)];
+            UiScaling.SetScale(menu, scale);
+            menu.LayoutTransform = new ScaleTransform(UiScaling.GetScale(menu), UiScaling.GetScale(menu));
+            // ContextMenu has a separate visual root. Its nested PART_Popup
+            // instances already carry the ancestor transform into their own
+            // PopupRoot, so applying another scale to submenus would double it.
+            menu.Opened += delegate { FitToMonitor(menu); };
             return menu;
         }
+
+        private static void FitToMonitor(ContextMenu menu)
+        {
+            var source = PresentationSource.FromVisual(menu) as HwndSource;
+            if (source == null || source.CompositionTarget == null) return;
+            var info = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
+            if (!GetMonitorInfo(MonitorFromWindow(source.Handle, 2), ref info)) return;
+            Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
+            double width = (info.Work.Right - info.Work.Left) * Math.Abs(fromDevice.M11);
+            double height = (info.Work.Bottom - info.Work.Top) * Math.Abs(fromDevice.M22);
+            double effectiveScale = UiScaling.FitToWidth(UiScaling.GetScale(menu), 260, Math.Max(1, width - 12));
+            menu.LayoutTransform = new ScaleTransform(effectiveScale, effectiveScale);
+            // The scroll viewers keep every command reachable on short screens.
+            // Resources also flow into submenu popup children; WPF handles their
+            // edge flipping and placement in the monitor work area.
+            menu.Resources["MenuMaxHeight"] = Math.Max(1, Math.Min(520, (height - 12) / effectiveScale));
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MonitorInfo { public int Size; public NativeRect Monitor, Work; public uint Flags; }
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
         public static bool IsDark(string theme)
         {
@@ -64,7 +96,7 @@ namespace DesktopTodo
     <Setter Property='FontSize' Value='14'/>
     <Setter Property='MinWidth' Value='240'/>
     <Setter Property='MaxWidth' Value='260'/>
-    <Setter Property='MaxHeight' Value='520'/>
+    <Setter Property='MaxHeight' Value='{DynamicResource MenuMaxHeight}'/>
     <Setter Property='Padding' Value='4'/>
     <Setter Property='SnapsToDevicePixels' Value='True'/>
     <Setter Property='UseLayoutRounding' Value='True'/>
@@ -126,7 +158,7 @@ namespace DesktopTodo
             <Popup x:Name='PART_Popup' Placement='Right' HorizontalOffset='2' VerticalOffset='-4' Focusable='False'
                    AllowsTransparency='True' PopupAnimation='None' IsOpen='{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}'>
               <Border Background='{DynamicResource MenuSurface}' BorderBrush='{DynamicResource MenuLine}' BorderThickness='1'
-                      CornerRadius='10' Padding='4' MinWidth='240' MaxWidth='260' MaxHeight='520'>
+                      CornerRadius='10' Padding='4' MinWidth='240' MaxWidth='260' MaxHeight='{DynamicResource MenuMaxHeight}'>
                 <ScrollViewer CanContentScroll='True' VerticalScrollBarVisibility='Auto' HorizontalScrollBarVisibility='Disabled'
                               Focusable='False' Background='Transparent' BorderThickness='0'>
                   <ItemsPresenter x:Name='ItemsPresenter' KeyboardNavigation.DirectionalNavigation='Cycle' SnapsToDevicePixels='True'/>

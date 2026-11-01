@@ -23,6 +23,7 @@ namespace DesktopTodo
     public sealed class SettingsEditResult
     {
         public double BackgroundOpacity { get; set; }
+        public double UiScale { get; set; }
         public bool Animations { get; set; }
         public bool StartWithWindows { get; set; }
         public string Theme { get; set; }
@@ -33,6 +34,12 @@ namespace DesktopTodo
         private sealed class Palette
         {
             public string Surface, Ink, Muted, Field, Line, Accent, AccentInk, Selected, Error;
+        }
+        private sealed class DialogLayout
+        {
+            public double Scale;
+            public ScrollViewer Scroller;
+            public bool Positioning;
         }
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeRect { public int Left, Top, Right, Bottom; }
@@ -323,6 +330,9 @@ namespace DesktopTodo
             // An editor opened by a desktop child is an independent top-level window.
             // Give it a temporary taskbar entry so Alt+Tab can always bring it back.
             window.ShowInTaskbar = window.Owner == null;
+            // Capture the owner's size once. A settings preview must not move the
+            // slider under the pointer by resizing its own dialog while dragging.
+            UiScaling.SetScale(window, owner == null ? 1.0 : UiScaling.GetScale(owner));
             window.Resources = Styles(p);
             window.Loaded += delegate { Position(window, owner); window.Activate(); };
             window.SizeChanged += delegate { if (window.IsLoaded) Position(window, owner); };
@@ -331,6 +341,11 @@ namespace DesktopTodo
 
         private static void Position(Window window, Window anchor)
         {
+            DialogLayout layout = window.Tag as DialogLayout;
+            if (layout != null && layout.Positioning) return;
+            if (layout != null) layout.Positioning = true;
+            try
+            {
             Rect work = SystemParameters.WorkArea;
             Rect near = Rect.Empty;
             PresentationSource source = PresentationSource.FromVisual(window);
@@ -346,6 +361,10 @@ namespace DesktopTodo
                 if (GetMonitorInfo(MonitorFromWindow(anchorHwnd, 2), ref info))
                     work = new Rect(fromDevice.Transform(new Point(info.Work.Left, info.Work.Top)), fromDevice.Transform(new Point(info.Work.Right, info.Work.Bottom)));
             }
+            window.MaxWidth = Math.Max(1, work.Width - 24);
+            window.MaxHeight = Math.Max(1, work.Height - 24);
+            if (layout != null)
+                layout.Scroller.MaxHeight = Math.Max(1, window.MaxHeight / layout.Scale - 2);
             double width = window.ActualWidth > 0 ? window.ActualWidth : window.Width;
             double height = window.ActualHeight > 0 ? window.ActualHeight : 360;
             double left = near.IsEmpty ? work.Left + (work.Width - width) / 2 : near.Left - width - 12;
@@ -353,13 +372,28 @@ namespace DesktopTodo
             if (!near.IsEmpty && left < work.Left + 12) { left = near.Right - width; top = near.Bottom + 12; }
             window.Left = Math.Max(work.Left + 12, Math.Min(left, work.Right - width - 12));
             window.Top = Math.Max(work.Top + 12, Math.Min(top, work.Bottom - height - 12));
+            }
+            finally { if (layout != null) layout.Positioning = false; }
         }
 
         private static StackPanel Body(Window window, string title, string subtitle, Palette p)
         {
             Border shell = new Border { CornerRadius = new CornerRadius(10), Background = B(p.Surface), BorderBrush = B(p.Line), BorderThickness = new Thickness(1) };
             StackPanel body = new StackPanel { Margin = new Thickness(18, 15, 18, 18) };
-            shell.Child = body;
+            double scale = UiScaling.GetScale(window);
+            ScrollViewer scroller = new ScrollViewer
+            {
+                Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = Math.Max(1, (SystemParameters.WorkArea.Height - 24) / scale - 2),
+                CanContentScroll = false
+            };
+            shell.Child = scroller;
+            shell.LayoutTransform = new ScaleTransform(scale, scale);
+            window.Width *= scale;
+            window.MaxWidth = Math.Max(1, SystemParameters.WorkArea.Width - 24);
+            window.MaxHeight = Math.Max(1, SystemParameters.WorkArea.Height - 24);
+            window.Tag = new DialogLayout { Scale = scale, Scroller = scroller };
             window.Content = shell;
             Grid header = new Grid { Margin = new Thickness(0, 0, 0, 10), Background = Brushes.Transparent };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -489,6 +523,8 @@ namespace DesktopTodo
                 SelectedDate = localDue.Date, SelectedDateFormat = DatePickerFormat.Short,
                 Language = XmlLanguage.GetLanguage("zh-CN"), Style = (Style)window.Resources["DatePicker"]
             };
+            // PART_Popup is in this template's visual tree. WPF carries the outer
+            // layout transform into its PopupRoot, so do not scale Calendar again.
             AutomationProperties.SetName(date, "截止日期");
             date.DateValidationError += delegate(object sender, DatePickerDateValidationErrorEventArgs e) { e.ThrowException = false; };
             dateRow.Children.Add(date);
@@ -537,11 +573,46 @@ namespace DesktopTodo
             return result;
         }
 
-        public static SettingsEditResult EditSettings(Window owner, AppSettings settings)
+        public static SettingsEditResult EditSettings(Window owner, AppSettings settings, Action<double> previewScale = null)
         {
             Palette p = Colors(owner, settings.Theme);
             Window window = CreateWindow(owner, "外观与设置", p);
+            if (owner == null) UiScaling.SetScale(window, settings.UiScale);
             StackPanel body = Body(window, "外观与设置", null, p);
+            Grid sizeHeader = new Grid();
+            sizeHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sizeHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            sizeHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            sizeHeader.Children.Add(Label("整体大小", p));
+            TextBlock sizeValue = new TextBlock { Foreground = B(p.Ink), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 8) };
+            Grid.SetColumn(sizeValue, 1);
+            sizeHeader.Children.Add(sizeValue);
+            Button resetScale = Button(window, "恢复100%", false);
+            resetScale.Style = (Style)window.Resources["Quiet"];
+            resetScale.MinWidth = 0;
+            resetScale.FontSize = 12;
+            resetScale.Padding = new Thickness(2, 0, 0, 0);
+            resetScale.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(resetScale, 2);
+            sizeHeader.Children.Add(resetScale);
+            body.Children.Add(sizeHeader);
+            Slider size = new Slider
+            {
+                Minimum = AppSettings.MinimumUiScale, Maximum = AppSettings.MaximumUiScale,
+                TickFrequency = .05, IsSnapToTickEnabled = true, SmallChange = .05, LargeChange = .10,
+                Style = (Style)window.Resources["OpacitySlider"],
+                Value = AppSettings.NormalizeUiScale(settings.UiScale), Margin = new Thickness(0, 0, 0, 14)
+            };
+            AutomationProperties.SetName(size, "整体大小");
+            sizeValue.Text = Math.Round(size.Value * 100).ToString(CultureInfo.InvariantCulture) + "%";
+            size.ValueChanged += delegate
+            {
+                double value = AppSettings.NormalizeUiScale(size.Value);
+                sizeValue.Text = Math.Round(value * 100).ToString(CultureInfo.InvariantCulture) + "%";
+                if (previewScale != null) previewScale(value);
+            };
+            resetScale.Click += delegate { size.Value = 1.0; };
+            body.Children.Add(size);
             Grid opacityHeader = new Grid();
             opacityHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             opacityHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -585,6 +656,7 @@ namespace DesktopTodo
                 result = new SettingsEditResult
                 {
                     BackgroundOpacity = Math.Round(opacity.Value, 2),
+                    UiScale = AppSettings.NormalizeUiScale(size.Value),
                     Animations = animation.IsChecked == true,
                     StartWithWindows = startup.IsChecked == true,
                     Theme = light.IsChecked == true ? "light" : dark.IsChecked == true ? "dark" : "auto"

@@ -36,6 +36,10 @@ namespace DesktopTodo.Tests
             Test("failed backup commit leaves live file unchanged", FailedSave);
             Test("failed live archive commit restores in-memory items", FailedArchiveCommit);
             Test("deadline stages and formatting use current wall clock", Deadlines);
+            Test("legacy JSON without UI scale retains current tasks at 100 percent", LegacyUiScale);
+            Test("UI scale roundtrips without changing task order or contents", UiScaleRoundtrip);
+            Test("UI scale normalization handles bounds and nonfinite values", UiScaleNormalization);
+            Test("invalid JSON UI scale does not fall back to an older backup", InvalidUiScalePreservesTasks);
             string summary = "Passed: " + passed + "; Failed: " + failed + "; Evidence: " + root;
             Console.WriteLine(summary);
             File.WriteAllText(Path.Combine(root, "result.txt"), summary, new UTF8Encoding(false));
@@ -85,6 +89,7 @@ namespace DesktopTodo.Tests
             Assert(repo.State.Categories.Count == 1 && repo.State.Categories.Single().Id == "inbox" && repo.State.Categories.Single().Name == "默认", "Initial state must contain only the default category.");
             Assert(repo.State.Settings.ActiveCategoryId == "inbox", "Default category must be selected.");
             Assert(repo.State.Settings.BackgroundOpacity == .35 && !repo.State.Settings.Topmost && repo.State.Settings.Animations, "Defaults mismatch.");
+            Assert(repo.State.Settings.UiScale == 1.0, "Default UI scale must preserve the existing appearance.");
             Assert(File.Exists(Path.Combine(Folder("initial"), "data.json")), "New state not persisted.");
         }
 
@@ -244,6 +249,72 @@ namespace DesktopTodo.Tests
             repo.ArchiveAndPrune(Now);
             ArchiveDocument archive = Json.Deserialize<ArchiveDocument>(File.ReadAllText(Path.Combine(Folder("archive-commit-failure"), "archive", "2026-10-31.json")));
             Assert(repo.State.Items.Count == 0 && archive.Items.Count == 1, "Retry after write fault did not converge.");
+        }
+
+        private static void LegacyUiScale()
+        {
+            TodoRepository repo = Open("legacy-scale");
+            repo.State.Items.Add(Item("legacy-task", null, null));
+            repo.Save();
+            string path = Path.Combine(Folder("legacy-scale"), "data.json");
+            Dictionary<string, object> document = (Dictionary<string, object>)Json.DeserializeObject(File.ReadAllText(path));
+            ((Dictionary<string, object>)document["Settings"]).Remove("UiScale");
+            File.WriteAllText(path, Json.Serialize(document), new UTF8Encoding(false));
+            TodoRepository loaded = Open("legacy-scale");
+            Assert(loaded.State.Settings.UiScale == 1.0, "An old JSON file must default to 100 percent.");
+            Assert(loaded.State.Items.Single().Id == "legacy-task" && loaded.StartupNotice == null, "Loading the legacy file changed tasks or recovered an older backup.");
+        }
+
+        private static void UiScaleRoundtrip()
+        {
+            TodoRepository repo = Open("scale-roundtrip");
+            TodoItem first = Item("first-scale", null, null);
+            first.Title = "保存缩放时保留完整事项";
+            first.DueAt = Now.AddHours(3).ToString("o");
+            repo.State.Items.Add(first);
+            repo.State.Items.Add(Item("second-scale", null, null));
+            repo.State.Settings.UiScale = 1.25;
+            repo.Save();
+            TodoRepository loaded = Open("scale-roundtrip");
+            Assert(loaded.State.Settings.UiScale == 1.25, "UI scale did not survive save/reload.");
+            Assert(loaded.State.Items.Select(x => x.Id).SequenceEqual(new string[] { "first-scale", "second-scale" }), "Scaling changed task order.");
+            Assert(loaded.State.Items[0].Title == first.Title && loaded.State.Items[0].DueAt == first.DueAt, "Scaling changed task contents.");
+        }
+
+        private static void UiScaleNormalization()
+        {
+            Assert(AppSettings.MinimumUiScale == .8 && AppSettings.MaximumUiScale == 1.5, "Unexpected scale limits.");
+            Assert(AppSettings.NormalizeUiScale(.1) == .8 && AppSettings.NormalizeUiScale(9) == 1.5, "Out-of-range scales were not clamped.");
+            Assert(AppSettings.NormalizeUiScale(.8) == .8 && AppSettings.NormalizeUiScale(1.5) == 1.5 && AppSettings.NormalizeUiScale(1.23) == 1.23, "A valid scale was changed.");
+            foreach (double invalid in new double[] { Double.NaN, Double.PositiveInfinity, Double.NegativeInfinity, 0, -1 })
+                Assert(AppSettings.NormalizeUiScale(invalid) == 1.0, "An unusable scale must fall back to 100 percent.");
+            TodoRepository repo = Open("nonfinite-scale");
+            repo.State.Items.Add(Item("nonfinite-kept", null, null));
+            repo.State.Settings.UiScale = Double.PositiveInfinity;
+            repo.Save();
+            TodoRepository loaded = Open("nonfinite-scale");
+            Assert(loaded.State.Settings.UiScale == 1.0 && loaded.State.Items.Single().Id == "nonfinite-kept", "Saving a nonfinite appearance value damaged task data.");
+        }
+
+        private static void InvalidUiScalePreservesTasks()
+        {
+            object[] rawValues = new object[] { .25, 3, 0, -2, "NaN", "Infinity", "not-a-number", null, true, new object[] { 1, 2 } };
+            double[] expected = new double[] { .8, 1.5, 1, 1, 1, 1, 1, 1, 1, 1 };
+            for (int index = 0; index < rawValues.Length; index++)
+            {
+                string name = "invalid-scale-" + index;
+                TodoRepository repo = Open(name);
+                repo.State.Items.Add(Item("current-task", null, null));
+                repo.Save(); // The previous backup is empty, making accidental recovery observable.
+                string path = Path.Combine(Folder(name), "data.json");
+                Dictionary<string, object> document = (Dictionary<string, object>)Json.DeserializeObject(File.ReadAllText(path));
+                ((Dictionary<string, object>)document["Settings"])["UiScale"] = rawValues[index];
+                File.WriteAllText(path, Json.Serialize(document), new UTF8Encoding(false));
+                TodoRepository loaded = Open(name);
+                Assert(loaded.State.Settings.UiScale == expected[index], "JSON scale normalization failed for case " + index);
+                Assert(loaded.State.Items.Single().Id == "current-task" && loaded.StartupNotice == null, "An appearance-only problem caused task recovery/loss for case " + index);
+                Assert(!File.Exists(Path.Combine(Folder(name), "data.corrupt.json")), "A scale-only correction should not quarantine the whole document.");
+            }
         }
     }
 }

@@ -175,7 +175,17 @@ namespace DesktopTodo
             if (version > 1) throw new UnsupportedVersionException("此数据由更新版本的桌面待办创建，请使用新版程序打开；文件未修改。");
             if (version != 1 || !envelope.ContainsKey("Categories") || !envelope.ContainsKey("Items") || !envelope.ContainsKey("Settings"))
                 throw new InvalidDataException("待办数据结构不完整。");
-            TodoState value = json.Deserialize<TodoState>(text);
+            // A malformed appearance preference must not roll back otherwise valid tasks.
+            // Normalize this one field before typed conversion; absent fields retain constructor defaults.
+            Dictionary<string, object> settings = envelope["Settings"] as Dictionary<string, object>;
+            if (settings != null && settings.ContainsKey("UiScale"))
+            {
+                double scale;
+                if (!Double.TryParse(Convert.ToString(settings["UiScale"], CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out scale))
+                    scale = 1.0;
+                settings["UiScale"] = AppSettings.NormalizeUiScale(scale);
+            }
+            TodoState value = json.ConvertToType<TodoState>(envelope);
             ValidateState(value);
             return value;
         }
@@ -202,6 +212,7 @@ namespace DesktopTodo
                 ValidateOptionalDate(item.DeletedAt, "删除时间", item.Title);
             }
             AppSettings s = value.Settings;
+            s.UiScale = AppSettings.NormalizeUiScale(s.UiScale);
             if (Double.IsNaN(s.BackgroundOpacity) || Double.IsInfinity(s.BackgroundOpacity) || s.BackgroundOpacity < 0 || s.BackgroundOpacity > 1)
                 throw new InvalidDataException("底板不透明度应在 0 到 1 之间。");
             if (s.Theme != "auto" && s.Theme != "light" && s.Theme != "dark") throw new InvalidDataException("主题应为 auto、light 或 dark。");

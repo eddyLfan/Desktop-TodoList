@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -39,6 +40,7 @@ internal static class MenuPreview
             canvas.Arrange(new Rect(0, 0, canvas.Width, canvas.Height));
             canvas.UpdateLayout();
             ValidateTree(canvas);
+            ValidatePopupScaling();
             var bitmap = new RenderTargetBitmap(1140, 1050, 144, 144, PixelFormats.Pbgra32);
             bitmap.Render(canvas);
             var png = new PngBitmapEncoder();
@@ -46,6 +48,7 @@ internal static class MenuPreview
             string path = args.Length == 0 ? "menu-preview.png" : args[0];
             using (var stream = File.Create(path)) png.Save(stream);
             Console.WriteLine("Validated menu templates: " + checkedTemplates + "; rendered: " + Path.GetFullPath(path));
+            Console.WriteLine("PASS 18 menu layouts: both themes at 80/100/150%, root and two nested popup levels, no native window opened.");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
@@ -120,6 +123,65 @@ internal static class MenuPreview
         if (separator != null) { separator.ApplyTemplate(); checkedTemplates++; }
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
             ValidateTree(VisualTreeHelper.GetChild(element, i));
+    }
+
+    private static void ValidatePopupScaling()
+    {
+        foreach (bool dark in new[] { false, true })
+            foreach (double scale in new[] { .8, 1.0, 1.5 })
+            {
+                ContextMenu menu = MenuStyles.Create(dark, scale);
+                var category = new MenuItem { Header = "管理分类" };
+                var nested = new MenuItem { Header = "课程学习" };
+                nested.Items.Add(new MenuItem { Header = "重命名分类" });
+                category.Items.Add(nested); menu.Items.Add(category);
+                Layout(menu);
+                RequireNear(menu.DesiredSize.Width, 240 * scale, "Root menu width");
+                FrameworkElement firstPopupRoot = LayoutPopup(category, scale);
+                LayoutPopup(nested, scale);
+                // Keep the first visual root alive until the second popup has
+                // walked its full ancestor transform chain.
+                GC.KeepAlive(firstPopupRoot);
+            }
+    }
+
+    private static FrameworkElement LayoutPopup(MenuItem item, double scale)
+    {
+        item.ApplyTemplate();
+        var popup = (Popup)item.Template.FindName("PART_Popup", item);
+        if (popup.IsOpen) throw new Exception("Layout regression must not open a native popup.");
+
+        // Exercise the framework's real popup transform propagation without
+        // opening a window. .NET Framework stores PopupRoot in an internal
+        // SecurityCriticalDataForSet<T> wrapper; newer WPF uses a direct field.
+        Type rootType = typeof(Popup).Assembly.GetType("System.Windows.Controls.Primitives.PopupRoot", true);
+        var root = (FrameworkElement)Activator.CreateInstance(rootType, true);
+        FieldInfo rootField = typeof(Popup).GetField("_popupRoot", BindingFlags.Instance | BindingFlags.NonPublic);
+        object value = root;
+        if (!rootField.FieldType.IsAssignableFrom(rootType))
+            value = Activator.CreateInstance(rootField.FieldType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null, new object[] { root }, null);
+        rootField.SetValue(popup, value);
+        rootType.GetProperty("Child", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).SetValue(root, popup.Child, null);
+        typeof(Popup).GetMethod("UpdateTransform", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(popup, null);
+        Layout(root);
+        Rect rendered = popup.Child.TransformToAncestor(root).TransformBounds(new Rect(popup.Child.RenderSize));
+        RequireNear(rendered.Width, 240 * scale, "Nested menu must scale once");
+        RequireNear(rendered.Height / popup.Child.RenderSize.Height, scale, "Nested text and hit targets must scale together");
+        if (Math.Abs(UiScaling.GetScale(item) - scale) > .001)
+            throw new Exception("Nested menu lost the inherited UI scale.");
+        return root;
+    }
+
+    private static void Layout(FrameworkElement element)
+    {
+        element.Measure(new Size(1600, 1600));
+        element.Arrange(new Rect(element.DesiredSize)); element.UpdateLayout();
+    }
+
+    private static void RequireNear(double actual, double expected, string message)
+    {
+        if (Math.Abs(actual - expected) > .1) throw new Exception(message + ": " + actual + " instead of " + expected);
     }
 
     private static Brush Solid(string color) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); }
