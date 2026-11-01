@@ -82,18 +82,22 @@ if ($RunTests) {
         & $testExe
         if ($LASTEXITCODE -ne 0) { throw '数据与倒计时测试失败。' }
     } finally { Pop-Location }
-    $uiChecks = @(
+    $additionalChecks = @(
+        @{ Name='TodoOrderTests'; Sources=@('src\Models.cs','src\Storage.cs','src\Deadline.cs','src\TodoOrder.cs','tests\TodoOrderTests.cs'); Arguments=@() },
         @{ Name='DialogTemplateTests'; Sources=@('src\Models.cs','src\Dialogs.cs','tests\DialogTemplateTests.cs'); Arguments=@() },
         @{ Name='MenuTemplateTests'; Sources=@('src\MenuStyles.cs','tests\MenuTemplateTests.cs'); Arguments=@((Join-Path $workDir 'menu-preview.png')) }
     )
-    foreach ($check in $uiChecks) {
+    foreach ($check in $additionalChecks) {
         $checkExe = Join-Path $workDir ($check.Name + '.exe')
         $checkSources = $check.Sources | ForEach-Object { Join-Path $projectRoot $_ }
         & $compiler /nologo /target:exe /codepage:65001 ('/out:'+$checkExe) @refs @checkSources
         if ($LASTEXITCODE -ne 0) { throw ($check.Name + ' 编译失败。') }
         $checkArguments = $check.Arguments
-        & $checkExe @checkArguments
-        if ($LASTEXITCODE -ne 0) { throw ($check.Name + ' 检查失败。') }
+        Push-Location $projectRoot
+        try {
+            & $checkExe @checkArguments
+            if ($LASTEXITCODE -ne 0) { throw ($check.Name + ' 检查失败。') }
+        } finally { Pop-Location }
     }
     & (Join-Path $projectRoot 'tests\ReleaseWorkflowTests.ps1')
 }

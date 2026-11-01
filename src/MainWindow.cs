@@ -37,6 +37,20 @@ namespace DesktopTodo
         private readonly DesktopLayer desktopLayer;
         private readonly Dictionary<string, TextBlock> countdowns = new Dictionary<string, TextBlock>();
         private readonly Dictionary<string, TextBlock> categoryUrgency = new Dictionary<string, TextBlock>();
+        private readonly Dictionary<string, FrameworkElement> taskRows = new Dictionary<string, FrameworkElement>();
+        private readonly List<PendingRow> pendingRows = new List<PendingRow>();
+        private const string TodoDragFormat = "DesktopTodo.PendingOrder.v1";
+        private Button pressedDragHandle;
+        private Point dragStart;
+        private bool dragging;
+        private bool refreshAfterDrag;
+        private string dragToken;
+        private string dragItemId;
+        private string dragCategoryId;
+        private string dropTargetId;
+        private bool dropAfter;
+        private Border dropMarker;
+        private DateTime lastDragScroll;
         private SolidColorBrush ink;
         private SolidColorBrush muted;
         private SolidColorBrush accent;
@@ -130,6 +144,10 @@ namespace DesktopTodo
                 MaxHeight = 350,
                 Padding = new Thickness(0, 0, 3, 0)
             };
+            listScroll.AllowDrop = true;
+            listScroll.DragOver += DragOverList;
+            listScroll.Drop += DropOnList;
+            listScroll.DragLeave += delegate { ClearDropMarker(); };
             Grid.SetRow(listScroll, 1);
             layout.Children.Add(listScroll);
 
@@ -238,6 +256,67 @@ namespace DesktopTodo
             return brush;
         }
 
+        internal static ControlTemplate CreateTodoCheckTemplate(bool dark)
+        {
+            var root = new FrameworkElementFactory(typeof(Grid));
+            root.SetValue(FrameworkElement.WidthProperty, 22.0);
+            root.SetValue(FrameworkElement.HeightProperty, 22.0);
+            root.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
+            var focus = new FrameworkElementFactory(typeof(Border));
+            focus.Name = "FocusRing";
+            focus.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            focus.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            focus.SetValue(Border.BorderBrushProperty, new SolidColorBrush(dark ? Color.FromRgb(172, 205, 181) : Color.FromRgb(68, 107, 80)));
+            focus.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+            root.AppendChild(focus);
+            var box = new FrameworkElementFactory(typeof(Border));
+            box.Name = "CheckSurface";
+            box.SetValue(FrameworkElement.WidthProperty, 18.0);
+            box.SetValue(FrameworkElement.HeightProperty, 18.0);
+            box.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            box.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            box.SetValue(Border.BorderBrushProperty, new SolidColorBrush(dark ? Color.FromRgb(152, 175, 159) : Color.FromRgb(111, 139, 120)));
+            box.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            root.AppendChild(box);
+            var mark = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
+            mark.Name = "CheckMark";
+            mark.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M4,8.5 L7.2,11.5 L13.8,5"));
+            mark.SetValue(System.Windows.Shapes.Path.StrokeProperty, Brushes.White);
+            mark.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 1.7);
+            mark.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
+            mark.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, PenLineCap.Round);
+            mark.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
+            mark.SetValue(FrameworkElement.WidthProperty, 18.0);
+            mark.SetValue(FrameworkElement.HeightProperty, 18.0);
+            mark.SetValue(UIElement.IsHitTestVisibleProperty, false);
+            mark.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+            root.AppendChild(mark);
+            var template = new ControlTemplate(typeof(CheckBox)) { VisualTree = root };
+            var selected = new Trigger { Property = System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, Value = true };
+            Brush selectedBrush = new SolidColorBrush(dark ? Color.FromRgb(78, 119, 91) : Color.FromRgb(68, 107, 80));
+            selected.Setters.Add(new Setter(Border.BackgroundProperty, selectedBrush, "CheckSurface"));
+            selected.Setters.Add(new Setter(Border.BorderBrushProperty, selectedBrush, "CheckSurface"));
+            selected.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "CheckMark"));
+            template.Triggers.Add(selected);
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Border.BorderBrushProperty,
+                new SolidColorBrush(dark ? Color.FromRgb(196, 222, 202) : Color.FromRgb(49, 86, 61)), "CheckSurface"));
+            template.Triggers.Add(hover);
+            var hoverEmpty = new MultiTrigger();
+            hoverEmpty.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hoverEmpty.Conditions.Add(new Condition(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, false));
+            hoverEmpty.Setters.Add(new Setter(Border.BackgroundProperty,
+                new SolidColorBrush(dark ? Color.FromArgb(38, 122, 161, 134) : Color.FromArgb(22, 73, 115, 86)), "CheckSurface"));
+            template.Triggers.Add(hoverEmpty);
+            var focused = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+            focused.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "FocusRing"));
+            template.Triggers.Add(focused);
+            var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            disabled.Setters.Add(new Setter(UIElement.OpacityProperty, .45));
+            template.Triggers.Add(disabled);
+            return template;
+        }
+
         private UIElement PinIcon(bool selected)
         {
             var icon = new System.Windows.Shapes.Path
@@ -301,6 +380,7 @@ namespace DesktopTodo
 
         public void RefreshView()
         {
+            if (dragging) { refreshAfterDrag = true; return; }
             if (state.Categories == null || state.Items == null) return;
             if (!state.Categories.Any(c => c.Id == state.Settings.ActiveCategoryId))
                 state.Settings.ActiveCategoryId = state.Categories.Count > 0 ? state.Categories[0].Id : "inbox";
@@ -339,8 +419,12 @@ namespace DesktopTodo
 
             taskPanel.Children.Clear();
             countdowns.Clear();
+            taskRows.Clear();
+            pendingRows.Clear();
             List<TodoItem> visible = state.Items.Where(i => string.IsNullOrEmpty(i.DeletedAt) && i.CategoryId == state.Settings.ActiveCategoryId).ToList();
-            List<TodoItem> pending = visible.Where(i => string.IsNullOrEmpty(i.CompletedAt)).OrderBy(i => Deadline.Parse(i.DueAt) ?? DateTimeOffset.MaxValue).ThenBy(i => i.CreatedAt).ToList();
+            // The JSON item order is the user's order. Deadlines continue to
+            // drive the cross-category reminder, never overwrite manual order.
+            List<TodoItem> pending = visible.Where(i => string.IsNullOrEmpty(i.CompletedAt)).ToList();
             List<TodoItem> done = visible.Where(i => !string.IsNullOrEmpty(i.CompletedAt)).OrderByDescending(i => i.CompletedAt).ToList();
             if (pending.Count == 0)
             {
@@ -374,16 +458,23 @@ namespace DesktopTodo
         private UIElement CreateRow(TodoItem item)
         {
             bool done = !string.IsNullOrEmpty(item.CompletedAt);
-            Grid row = new Grid { Margin = new Thickness(0, 6, 0, 6) };
+            Grid host = new Grid { Margin = new Thickness(0, 2, 0, 2), Background = Brushes.Transparent };
+            Grid row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
             CheckBox check = new CheckBox
             {
                 IsChecked = done,
+                IsThreeState = false,
+                Width = 22,
+                Height = 22,
+                Template = CreateTodoCheckTemplate(dark),
+                FocusVisualStyle = null,
                 VerticalAlignment = VerticalAlignment.Top,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 3, 0, 0),
+                Margin = new Thickness(-2, 0, 0, 0),
                 Foreground = ink,
                 Cursor = Cursors.Hand,
                 ToolTip = done ? "移回待办" : "标记完成"
@@ -428,6 +519,34 @@ namespace DesktopTodo
             }
             Grid.SetColumn(content, 1);
             row.Children.Add(content);
+            if (!done)
+            {
+                Button handle = TextButton(null, "拖动调整顺序：" + item.Title, null);
+                handle.Width = 18;
+                handle.Height = 22;
+                handle.Padding = new Thickness(2, 2, 2, 2);
+                handle.VerticalAlignment = VerticalAlignment.Top;
+                handle.Cursor = Cursors.SizeAll;
+                handle.ToolTip = "拖动调整顺序";
+                GeometryGroup dots = new GeometryGroup();
+                foreach (double x in new double[] { 3, 7 })
+                    foreach (double y in new double[] { 4, 8, 12 })
+                        dots.Children.Add(new EllipseGeometry(new Point(x, y), .8, .8));
+                handle.Content = new System.Windows.Shapes.Path
+                {
+                    Data = dots, Fill = muted, Width = 10, Height = 16, Opacity = .55,
+                    IsHitTestVisible = false
+                };
+                handle.PreviewMouseLeftButtonDown += delegate(object sender, MouseButtonEventArgs e)
+                {
+                    pressedDragHandle = handle;
+                    dragStart = e.GetPosition(this);
+                };
+                handle.PreviewMouseLeftButtonUp += delegate { pressedDragHandle = null; };
+                handle.PreviewMouseMove += delegate(object sender, MouseEventArgs e) { StartItemDrag(handle, item, e); };
+                Grid.SetColumn(handle, 2);
+                row.Children.Add(handle);
+            }
             Button more = TextButton("⋯", "更多操作：" + item.Title, null);
             more.FontSize = 17;
             more.Padding = new Thickness(2, 0, 2, 0);
@@ -451,10 +570,168 @@ namespace DesktopTodo
             AddMenuItem(actions, "删除事项", delegate { DeleteTodo(item); });
             more.ContextMenu = actions;
             more.Click += delegate { actions.PlacementTarget = more; actions.IsOpen = true; };
-            Grid.SetColumn(more, 2);
+            Grid.SetColumn(more, 3);
             row.Children.Add(more);
             row.ContextMenu = actions;
-            return row;
+            host.Children.Add(row);
+            taskRows[item.Id] = host;
+            if (!done)
+            {
+                var marker = new Border
+                {
+                    Height = 2, Background = accent, CornerRadius = new CornerRadius(1),
+                    VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed,
+                    IsHitTestVisible = false
+                };
+                host.Children.Add(marker);
+                pendingRows.Add(new PendingRow { Id = item.Id, Element = host, Marker = marker });
+            }
+            return host;
+        }
+
+        private sealed class PendingRow
+        {
+            public string Id;
+            public FrameworkElement Element;
+            public Border Marker;
+        }
+
+        private void StartItemDrag(Button handle, TodoItem item, MouseEventArgs e)
+        {
+            if (dragging || pressedDragHandle != handle) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { pressedDragHandle = null; return; }
+            Point position = e.GetPosition(this);
+            if (Math.Abs(position.X - dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(position.Y - dragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            pressedDragHandle = null;
+            if (!IsPendingInCategory(item, state.Settings.ActiveCategoryId)) return;
+            handle.ReleaseMouseCapture();
+            dragging = true;
+            dragItemId = item.Id;
+            dragCategoryId = item.CategoryId;
+            dragToken = Guid.NewGuid().ToString("N");
+            dropTargetId = null;
+            lastDragScroll = DateTime.MinValue;
+            object previousAddContent = addButton.Content;
+            addButton.Content = "拖动排序 · 松开保存";
+            addButton.Foreground = accent;
+            DragDropEffects effect = DragDropEffects.None;
+            string target = null;
+            bool after = false;
+            string category = dragCategoryId;
+            string movingId = dragItemId;
+            try
+            {
+                var data = new DataObject();
+                data.SetData(TodoDragFormat, dragToken, false);
+                effect = DragDrop.DoDragDrop(handle, data, DragDropEffects.Move);
+                target = dropTargetId;
+                after = dropAfter;
+            }
+            finally
+            {
+                dragging = false;
+                dragToken = dragItemId = dragCategoryId = dropTargetId = null;
+                ClearDropMarker();
+                addButton.Content = previousAddContent;
+                addButton.Foreground = muted;
+                if (refreshAfterDrag) { refreshAfterDrag = false; RefreshView(); }
+            }
+            // Persist only after the native drag loop releases capture. This
+            // also keeps a possible save-error dialog outside the OLE drop call.
+            if (effect == DragDropEffects.Move && target != null && state.Settings.ActiveCategoryId == category)
+                Commit(delegate { return TodoOrder.MovePending(state, category, movingId, target, after); }, false);
+        }
+
+        private static bool IsPendingInCategory(TodoItem item, string category)
+        {
+            return item != null && item.CategoryId == category &&
+                string.IsNullOrEmpty(item.CompletedAt) && string.IsNullOrEmpty(item.DeletedAt);
+        }
+
+        private bool IsOwnPendingDrag(DragEventArgs e)
+        {
+            if (!dragging || dragToken == null || state.Settings.ActiveCategoryId != dragCategoryId ||
+                (e.AllowedEffects & DragDropEffects.Move) == 0) return false;
+            TodoItem moving = state.Items.FirstOrDefault(i => i.Id == dragItemId);
+            if (!IsPendingInCategory(moving, dragCategoryId)) return false;
+            try
+            {
+                return e.Data.GetDataPresent(TodoDragFormat, false) &&
+                    string.Equals(e.Data.GetData(TodoDragFormat, false) as string, dragToken, StringComparison.Ordinal);
+            }
+            catch (ExternalException) { return false; }
+        }
+
+        private PendingRow FindDropTarget(DragEventArgs e, out bool after)
+        {
+            after = false;
+            if (!IsOwnPendingDrag(e)) return null;
+            double y = e.GetPosition(taskPanel).Y;
+            PendingRow last = null;
+            double lastBottom = 0;
+            foreach (PendingRow candidate in pendingRows)
+            {
+                double top = candidate.Element.TranslatePoint(new Point(0, 0), taskPanel).Y;
+                double height = candidate.Element.ActualHeight;
+                if (y <= top + height / 2) return candidate;
+                last = candidate;
+                lastBottom = top + height;
+            }
+            // The completed section is not a sorting target.
+            if (last != null && y <= lastBottom + 8) { after = true; return last; }
+            return null;
+        }
+
+        private void DragOverList(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            e.Effects = DragDropEffects.None;
+            if (!IsOwnPendingDrag(e)) { ClearDropMarker(); return; }
+            DateTime now = DateTime.UtcNow;
+            Point point = e.GetPosition(listScroll);
+            if ((now - lastDragScroll).TotalMilliseconds >= 80)
+            {
+                if (point.Y < 24 && listScroll.VerticalOffset > 0)
+                {
+                    listScroll.ScrollToVerticalOffset(Math.Max(0, listScroll.VerticalOffset - 16));
+                    lastDragScroll = now;
+                }
+                else if (point.Y > listScroll.ActualHeight - 24 && listScroll.VerticalOffset < listScroll.ScrollableHeight)
+                {
+                    listScroll.ScrollToVerticalOffset(Math.Min(listScroll.ScrollableHeight, listScroll.VerticalOffset + 16));
+                    lastDragScroll = now;
+                }
+            }
+            bool after;
+            PendingRow target = FindDropTarget(e, out after);
+            ClearDropMarker();
+            if (target == null || target.Id == dragItemId) return;
+            dropMarker = target.Marker;
+            dropMarker.VerticalAlignment = after ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+            dropMarker.Visibility = Visibility.Visible;
+            e.Effects = DragDropEffects.Move;
+        }
+
+        private void DropOnList(object sender, DragEventArgs e)
+        {
+            e.Handled = true;
+            e.Effects = DragDropEffects.None;
+            bool after;
+            PendingRow target = FindDropTarget(e, out after);
+            ClearDropMarker();
+            if (target == null || target.Id == dragItemId) return;
+            TodoItem targetItem = state.Items.FirstOrDefault(i => i.Id == target.Id);
+            if (!IsPendingInCategory(targetItem, dragCategoryId)) return;
+            dropTargetId = target.Id;
+            dropAfter = after;
+            e.Effects = DragDropEffects.Move;
+        }
+
+        private void ClearDropMarker()
+        {
+            if (dropMarker != null) dropMarker.Visibility = Visibility.Collapsed;
+            dropMarker = null;
         }
 
         private void Tick(object sender, EventArgs e)
@@ -523,7 +800,11 @@ namespace DesktopTodo
             TodoItem item = state.Items.FirstOrDefault(i => i.Id == reminderItemId);
             if (item == null) return;
             if (state.Settings.ActiveCategoryId != item.CategoryId) SwitchCategory(item.CategoryId);
-            listScroll.ScrollToTop();
+            Dispatcher.BeginInvoke(new Action(delegate
+            {
+                FrameworkElement row;
+                if (taskRows.TryGetValue(item.Id, out row)) row.BringIntoView();
+            }), DispatcherPriority.Loaded);
         }
 
         private void SwitchCategory(string id)
@@ -707,10 +988,15 @@ namespace DesktopTodo
 
         private bool Commit(Action change, bool settingsChanged)
         {
+            return Commit(delegate { change(); return true; }, settingsChanged);
+        }
+
+        private bool Commit(Func<bool> change, bool settingsChanged)
+        {
             TodoState before = CopyState();
             try
             {
-                change();
+                if (!change()) return false;
                 persist();
             }
             catch (Exception ex)

@@ -16,8 +16,8 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("桌面待办")]
 [assembly: AssemblyDescription("简约透明的本地桌面待办")]
 [assembly: AssemblyProduct("DesktopTodo")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 
 namespace DesktopTodo
 {
